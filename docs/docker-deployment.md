@@ -173,14 +173,14 @@ When Karakeep and Spider_XHS run in the same Compose network, point Karakeep at 
 ```bash
 XIAOHONGSHU_BACKEND=spider_xhs
 XIAOHONGSHU_SPIDER_ENDPOINT=http://spider-xhs:18061/api/xhs/note
-SPIDER_XHS_DOWNLOADER_ENDPOINT=http://spider-xhs:18061/api/xhs/download
+XIAOHONGSHU_SPIDER_DOWNLOAD_ENDPOINT=http://spider-xhs:18061/api/xhs/download
 ```
 
 If Karakeep runs outside that network, use the server host/IP:
 
 ```bash
 XIAOHONGSHU_SPIDER_ENDPOINT=http://<server-ip>:18061/api/xhs/note
-SPIDER_XHS_DOWNLOADER_ENDPOINT=http://<server-ip>:18061/api/xhs/download
+XIAOHONGSHU_SPIDER_DOWNLOAD_ENDPOINT=http://<server-ip>:18061/api/xhs/download
 ```
 
 ## Environment Variables
