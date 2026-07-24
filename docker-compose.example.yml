@@ -1,0 +1,24 @@
+services:
+  spider-xhs:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: spider-xhs-http:latest
+    container_name: spider-xhs
+    restart: unless-stopped
+    ports:
+      - "18061:18061"
+    environment:
+      XHS_COOKIE_FILE: /run/secrets/xhs-cookie.txt
+      XHS_DOWNLOAD_DIR: /downloads
+      XHS_REQUEST_TIMEOUT_SECONDS: "30"
+      XHS_DOWNLOAD_TIMEOUT_SECONDS: "120"
+    volumes:
+      - ./secrets/xhs-cookie.txt:/run/secrets/xhs-cookie.txt:ro
+      - ./data/xhs-downloads:/downloads
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:18061/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

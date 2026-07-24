@@ -241,6 +241,89 @@ docker build -t spider_xhs .
 docker run -e COOKIES='your_cookie_here' spider_xhs
 ```
 
+### 🔌 HTTP Wrapper 部署（Karakeep 集成）
+
+本 fork 增加了一个轻量 HTTP 服务，供 Karakeep 等外部服务调用。
+
+完整 Docker 部署说明见 [docs/docker-deployment.md](docs/docker-deployment.md)，也支持直接使用 GitHub Container Registry 镜像：
+
+```bash
+docker pull ghcr.io/blueloverest/spider-xhs-http:latest
+```
+
+启动服务：
+
+```bash
+docker build -t spider-xhs-http .
+docker run -d \
+  --name spider-xhs \
+  -p 18061:18061 \
+  -e XHS_COOKIE_FILE=/run/secrets/xhs-cookie.txt \
+  -v /path/to/xhs-cookie.txt:/run/secrets/xhs-cookie.txt:ro \
+  spider-xhs-http
+```
+
+也可以直接传 Cookie：
+
+```bash
+docker run -d \
+  --name spider-xhs \
+  -p 18061:18061 \
+  -e XHS_COOKIE='a1=...; webId=...; web_session=...' \
+  spider-xhs-http
+```
+
+健康检查：
+
+```bash
+curl -s http://127.0.0.1:18061/health
+```
+
+获取笔记：
+
+```bash
+curl -s \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"https://www.xiaohongshu.com/explore/<note-id>?xsec_token=<token>"}' \
+  http://127.0.0.1:18061/api/xhs/note
+```
+
+也支持手机分享出来的短链接，例如 `xhslink.cn` / `xhslink.com`。短链接解析阶段不会携带你的 `XHS_COOKIE`，服务会先跟随跳转并还原为小红书笔记 URL，再进入正常解析流程。
+
+下载笔记媒体到共享目录：
+
+```bash
+docker run -d \
+  --name spider-xhs \
+  -p 18061:18061 \
+  -e XHS_COOKIE_FILE=/run/secrets/xhs-cookie.txt \
+  -e XHS_DOWNLOAD_DIR=/downloads \
+  -v /path/to/xhs-cookie.txt:/run/secrets/xhs-cookie.txt:ro \
+  -v /path/to/xhs-downloads:/downloads \
+  spider-xhs-http
+```
+
+```bash
+curl -s \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"https://www.xiaohongshu.com/explore/<note-id>?xsec_token=<token>","mediaTypes":["image","video"]}' \
+  http://127.0.0.1:18061/api/xhs/download
+```
+
+文件命名规则：
+
+- 图文图片：`image_0.jpg`、`image_1.jpg`
+- 视频封面：`cover.jpg`
+- 视频文件：`video.mp4`
+
+Karakeep worker 配置：
+
+```bash
+XIAOHONGSHU_BACKEND=spider_xhs
+XIAOHONGSHU_SPIDER_ENDPOINT=http://spider-xhs:18061/api/xhs/note
+SPIDER_XHS_DOWNLOADER_ENDPOINT=http://spider-xhs:18061/api/xhs/download
+```
+
 ---
 
 ## 📁 项目结构
@@ -346,5 +429,3 @@ ps: 请加群22、23、24，人满或者过期 issue | wx 提醒
 | group22 | group23 | group24 |
 |:--:|:--:|:--:|
 | <img width="280" alt="group22" src="https://github.com/user-attachments/assets/d2821fad-1be7-4712-8399-1a9f4710483a" /> | <img width="280" alt="group23" src="https://github.com/user-attachments/assets/ea27f64b-2f0c-46eb-9728-10691fef9756" /> | <img width="280" alt="group24" src="https://github.com/user-attachments/assets/4d153b10-598a-4f3b-9508-2c51832b89f0" /> |
-
-
