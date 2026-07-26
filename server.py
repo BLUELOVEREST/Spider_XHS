@@ -191,6 +191,44 @@ def _extension_for_asset(asset: dict[str, Any]) -> str:
     return ".jpg"
 
 
+def _mime_type_from_file(path: Path) -> str | None:
+    with path.open("rb") as file:
+        header = file.read(16)
+    if header.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if header.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if header.startswith(b"RIFF") and header[8:12] == b"WEBP":
+        return "image/webp"
+    if header.startswith(b"\x00\x00\x00") and b"ftyp" in header[:12]:
+        return "video/mp4"
+    return None
+
+
+def _extension_for_mime_type(mime_type: str | None) -> str | None:
+    if mime_type == "image/png":
+        return ".png"
+    if mime_type == "image/jpeg":
+        return ".jpg"
+    if mime_type == "image/webp":
+        return ".webp"
+    if mime_type == "video/mp4":
+        return ".mp4"
+    return None
+
+
+def _rename_to_detected_extension(path: Path, detected_mime_type: str | None) -> Path:
+    extension = _extension_for_mime_type(detected_mime_type)
+    if not extension or path.suffix.lower() == extension:
+        return path
+
+    target = path.with_suffix(extension)
+    if target.exists():
+        target.unlink()
+    path.rename(target)
+    return target
+
+
 def _file_name_for_asset(asset: dict[str, Any]) -> str:
     kind = str(asset.get("kind") or "file")
     role = str(asset.get("role") or "content")
@@ -200,6 +238,8 @@ def _file_name_for_asset(asset: dict[str, Any]) -> str:
         return f"cover{extension}"
     if kind == "video" and role == "content":
         return f"video{extension}"
+    if kind == "video" and role == "live":
+        return f"live_{index}{extension}"
     return f"{kind}_{index}{extension}"
 
 
@@ -248,6 +288,11 @@ def download_note(req: DownloadRequest) -> dict[str, Any]:
             file_name = _file_name_for_asset(asset)
             path = target_dir / file_name
             download_media_url(str(asset["url"]), path)
+            detected_mime_type = _mime_type_from_file(path)
+            if detected_mime_type:
+                asset["mimeType"] = detected_mime_type
+                path = _rename_to_detected_extension(path, detected_mime_type)
+                file_name = path.name
             files.append(
                 {
                     "kind": asset.get("kind"),

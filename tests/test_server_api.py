@@ -91,6 +91,61 @@ class FakeVideoPcApi:
         }
 
 
+class FakeWebpPcApi:
+    def get_note_info(self, url, cookies):
+        return True, "success", {
+            "data": {
+                "items": [
+                    {
+                        "id": "webp123",
+                        "url": url,
+                        "note_card": {
+                            "type": "normal",
+                            "title": "webp title",
+                            "image_list": [
+                                {
+                                    "url": (
+                                        "https://sns-webpic-qc.xhscdn.com/path/image"
+                                        "!nd_dft_wlteh_webp_3"
+                                    )
+                                }
+                            ],
+                        },
+                    }
+                ]
+            }
+        }
+
+
+class FakeLivePhotoPcApi:
+    def get_note_info(self, url, cookies):
+        return True, "success", {
+            "data": {
+                "items": [
+                    {
+                        "id": "live123",
+                        "url": url,
+                        "note_card": {
+                            "type": "normal",
+                            "title": "live title",
+                            "image_list": [
+                                {
+                                    "live_photo": True,
+                                    "url_default": "https://example.test/live-cover!nd_dft_wlteh_webp_3",
+                                    "stream": {
+                                        "h264": [
+                                            {"master_url": "https://example.test/live.mp4"},
+                                        ]
+                                    },
+                                }
+                            ],
+                        },
+                    }
+                ]
+            }
+        }
+
+
 class CapturingPcApi(FakePcApi):
     def __init__(self):
         self.urls = []
@@ -270,6 +325,55 @@ class ServerApiTest(unittest.TestCase):
             [(item["kind"], item["role"], item["name"], item["index"]) for item in body["files"]],
             [
                 ("image", "content", "image_0.jpg", 0),
+            ],
+        )
+
+    def test_download_endpoint_uses_detected_webp_mime_and_extension(self):
+        webp_bytes = b"RIFF\x10\x00\x00\x00WEBPVP8 \x00\x00\x00\x00"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch.dict(os.environ, {"XHS_COOKIE": "a1=test", "XHS_DOWNLOAD_DIR": temp_dir}, clear=True):
+                with patch.object(server, "get_pc_api", return_value=FakeWebpPcApi()):
+                    with patch("server.download_media_url") as download_media_url:
+                        download_media_url.side_effect = lambda url, path: path.write_bytes(webp_bytes)
+
+                        body = server.download_note(
+                            server.DownloadRequest(
+                                url="https://www.xiaohongshu.com/explore/webp123?xsec_token=token",
+                                mediaTypes=["image"],
+                            )
+                        )
+
+        self.assertTrue(body["success"])
+        self.assertEqual(body["files"][0]["name"], "image_0.webp")
+        self.assertEqual(body["files"][0]["mimeType"], "image/webp")
+
+    def test_download_endpoint_writes_live_photo_image_and_video(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch.dict(os.environ, {"XHS_COOKIE": "a1=test", "XHS_DOWNLOAD_DIR": temp_dir}, clear=True):
+                with patch.object(server, "get_pc_api", return_value=FakeLivePhotoPcApi()):
+                    with patch("server.download_media_url") as download_media_url:
+                        def fake_download(url, path):
+                            if url.endswith(".mp4"):
+                                path.write_bytes(b"\x00\x00\x00\x18ftypmp42")
+                            else:
+                                path.write_bytes(b"RIFF\x10\x00\x00\x00WEBPVP8 \x00\x00\x00\x00")
+
+                        download_media_url.side_effect = fake_download
+
+                        body = server.download_note(
+                            server.DownloadRequest(
+                                url="https://www.xiaohongshu.com/explore/live123?xsec_token=token",
+                                mediaTypes=["image", "video"],
+                            )
+                        )
+
+        self.assertTrue(body["success"])
+        self.assertEqual(
+            [(item["kind"], item["role"], item["name"], item["mimeType"], item["index"]) for item in body["files"]],
+            [
+                ("image", "content", "image_0.webp", "image/webp", 0),
+                ("video", "live", "live_0.mp4", "video/mp4", 0),
             ],
         )
 

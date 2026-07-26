@@ -28,6 +28,30 @@ def _image_url_from_value(value):
     return _first_text(value.get("url"), value.get("url_default"), value.get("url_pre"))
 
 
+def _video_url_from_stream(stream):
+    if not isinstance(stream, dict):
+        return ""
+
+    for codec in ("h264", "h265", "h266", "av1"):
+        streams = stream.get(codec)
+        if not isinstance(streams, list):
+            continue
+        for item in streams:
+            if isinstance(item, dict):
+                url = _first_text(item.get("master_url"), item.get("url"))
+                if url:
+                    return url
+    return ""
+
+
+def _live_video_url_from_image(value):
+    if not isinstance(value, dict):
+        return ""
+    if value.get("live_photo") is not True:
+        return ""
+    return _video_url_from_stream(value.get("stream"))
+
+
 def _adapt_image_list(images):
     adapted = []
     if not isinstance(images, list):
@@ -36,7 +60,11 @@ def _adapt_image_list(images):
     for image in images:
         url = _image_url_from_value(image)
         if url:
-            adapted.append({"url": url})
+            adapted_image = {"url": url}
+            live_video_url = _live_video_url_from_image(image)
+            if live_video_url:
+                adapted_image["liveVideoUrl"] = live_video_url
+            adapted.append(adapted_image)
     return adapted
 
 
@@ -111,10 +139,13 @@ def _video_url_from_raw(card):
 
 
 def _images(images):
-    return [
-        {"url": image["url"], "index": index, "width": None, "height": None}
-        for index, image in enumerate(_adapt_image_list(images))
-    ]
+    adapted = []
+    for index, image in enumerate(_adapt_image_list(images)):
+        item = {"url": image["url"], "index": index, "width": None, "height": None}
+        if image.get("liveVideoUrl"):
+            item["liveVideoUrl"] = image["liveVideoUrl"]
+        adapted.append(item)
+    return adapted
 
 
 def _legacy_image_list(images):
@@ -125,7 +156,7 @@ def _image_mime(url):
     lowered = url.lower().split("?", 1)[0]
     if lowered.endswith(".png"):
         return "image/png"
-    if lowered.endswith(".webp"):
+    if lowered.endswith(".webp") or "_webp" in lowered or "webp" in lowered.rsplit("/", 1)[-1]:
         return "image/webp"
     return "image/jpeg"
 
@@ -184,6 +215,17 @@ def adapt_note_for_karakeep(note, raw_note=None, include_raw=False):
                     "mimeType": _image_mime(image["url"]),
                 }
             )
+            if image.get("liveVideoUrl"):
+                assets.append(
+                    {
+                        "kind": "video",
+                        "url": image["liveVideoUrl"],
+                        "index": image["index"],
+                        "role": "live",
+                        "mimeType": "video/mp4",
+                        "coverUrl": image["url"],
+                    }
+                )
 
     for video in videos:
         asset = {

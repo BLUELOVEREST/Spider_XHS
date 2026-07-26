@@ -138,6 +138,71 @@ class KarakeepAdapterTest(unittest.TestCase):
         self.assertEqual(note["id"], "raw123")
         self.assertEqual(note["url"], "https://www.xiaohongshu.com/explore/raw123")
 
+    def test_marks_xiaohongshu_webp_transform_urls_as_webp(self):
+        raw_note = {
+            "id": "webp123",
+            "url": "https://www.xiaohongshu.com/explore/webp123",
+            "note_card": {
+                "type": "normal",
+                "image_list": [
+                    {
+                        "url": (
+                            "https://sns-webpic-qc.xhscdn.com/path/image"
+                            "!nd_dft_wlteh_webp_3"
+                        )
+                    }
+                ],
+            },
+        }
+
+        note = adapt_note_for_karakeep(raw_note)
+
+        self.assertEqual(note["assets"][0]["mimeType"], "image/webp")
+
+    def test_adapts_live_photo_images_with_video_asset(self):
+        raw_note = {
+            "id": "live123",
+            "url": "https://www.xiaohongshu.com/explore/live123",
+            "note_card": {
+                "type": "normal",
+                "image_list": [
+                    {
+                        "live_photo": True,
+                        "url_default": "https://example.test/live-cover!nd_dft_wlteh_webp_3",
+                        "stream": {
+                            "h264": [
+                                {"master_url": "https://example.test/live.mp4"},
+                            ]
+                        },
+                    }
+                ],
+            },
+        }
+
+        note = adapt_note_for_karakeep(raw_note)
+
+        self.assertEqual(note["images"][0]["liveVideoUrl"], "https://example.test/live.mp4")
+        self.assertEqual(
+            note["assets"],
+            [
+                {
+                    "kind": "image",
+                    "url": "https://example.test/live-cover!nd_dft_wlteh_webp_3",
+                    "index": 0,
+                    "role": "content",
+                    "mimeType": "image/webp",
+                },
+                {
+                    "kind": "video",
+                    "url": "https://example.test/live.mp4",
+                    "index": 0,
+                    "role": "live",
+                    "mimeType": "video/mp4",
+                    "coverUrl": "https://example.test/live-cover!nd_dft_wlteh_webp_3",
+                },
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
