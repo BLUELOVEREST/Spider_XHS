@@ -23,28 +23,53 @@ docker build -t spider-xhs-http:latest .
 
 ## Remote Image
 
-Tagged releases are built by GitHub Actions and pushed to GitHub Container Registry:
+Current maintained remotes:
 
 ```text
-ghcr.io/blueloverest/spider-xhs-http:<tag>
-ghcr.io/blueloverest/spider-xhs-http:latest
+origin   Gitea code archive and Gitea Actions image builds
+github   GitHub fork: git@github.com:BLUELOVEREST/Spider_XHS.git
+upstream original project
 ```
 
-For example:
+Keep development branches synchronized to both Gitea and the GitHub fork:
 
 ```bash
-docker pull ghcr.io/blueloverest/spider-xhs-http:latest
-```
-
-To publish a new image, push a `v*` tag:
-
-```bash
-git tag v0.1.0
 git push origin feature/http-wrapper
-git push origin v0.1.0
+git push github feature/http-wrapper
 ```
 
-The workflow builds `linux/amd64` and `linux/arm64` images, then publishes a multi-arch manifest for both `<tag>` and `latest`.
+Current image builds run on Gitea Actions and publish `linux/amd64` images to
+the self-hosted Gitea registry:
+
+```text
+192.168.200.101:54453/zhangzhicheng/eric-xhs-spider:<tag>
+192.168.200.101:54453/zhangzhicheng/eric-xhs-spider:latest
+```
+
+The `v3.0.0-eric.4` test tag was built successfully on Gitea in about 15
+minutes, which is acceptable for this resolver. The Dockerfile uses the
+Tsinghua Debian and PyPI mirrors plus the npmmirror npm registry during the
+build. The remaining external risk is the Nodesource setup script used to
+install Node.js 20:
+
+```text
+https://deb.nodesource.com/setup_20.x
+```
+
+If this step becomes slow or unstable, consider switching the Dockerfile to a
+multi-stage setup that copies Node.js from `node:20-slim` or using a small
+prebuilt runtime base image. For now, Gitea is the preferred image builder for
+this repository.
+
+To publish a new Gitea image, push the next `v*` tag to `origin`:
+
+```bash
+git tag v3.0.0-eric.5
+git push origin v3.0.0-eric.5
+```
+
+Push tags to `github` only when you intentionally want the GitHub fork workflow
+to build and publish GHCR multi-arch images.
 
 ## Run With Docker
 
@@ -65,7 +90,7 @@ docker run -d \
   spider-xhs-http:latest
 ```
 
-Using the remote GHCR image:
+Using the remote Gitea image:
 
 ```bash
 docker run -d \
@@ -76,7 +101,7 @@ docker run -d \
   -e XHS_DOWNLOAD_DIR=/downloads \
   -v "$PWD/secrets/xhs-cookie.txt:/run/secrets/xhs-cookie.txt:ro" \
   -v "$PWD/data/xhs-downloads:/downloads" \
-  ghcr.io/blueloverest/spider-xhs-http:latest
+  192.168.200.101:54453/zhangzhicheng/eric-xhs-spider:v3.0.0-eric.4
 ```
 
 Using an environment variable directly:
@@ -101,12 +126,12 @@ cp docker-compose.example.yml docker-compose.yml
 docker compose up -d --build
 ```
 
-To use the remote GHCR image instead of building locally, edit `docker-compose.yml` and remove the `build` block:
+To use the remote Gitea image instead of building locally, edit `docker-compose.yml` and remove the `build` block:
 
 ```yaml
 services:
   spider-xhs:
-    image: ghcr.io/blueloverest/spider-xhs-http:latest
+    image: 192.168.200.101:54453/zhangzhicheng/eric-xhs-spider:v3.0.0-eric.4
     container_name: spider-xhs
     restart: unless-stopped
     ports:
