@@ -1,0 +1,71 @@
+name: Build And Push Release Image
+
+# Release workflow for publishing the Karakeep-facing Xiaohongshu resolver
+# image to the self-hosted Gitea registry.
+
+"on":
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-push:
+    runs-on: ci
+
+    defaults:
+      run:
+        shell: sh
+
+    env:
+      REGISTRY: 192.168.200.101:54453
+      IMAGE_REPOSITORY: zhangzhicheng/eric-xhs-spider
+      APT_MIRROR: http://mirrors.tuna.tsinghua.edu.cn/debian
+      APT_SECURITY_MIRROR: http://mirrors.tuna.tsinghua.edu.cn/debian-security
+      PIP_INDEX_URL: https://pypi.tuna.tsinghua.edu.cn/simple
+      NPM_CONFIG_REGISTRY: https://registry.npmmirror.com
+      DOCKER_BUILDKIT: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show environment
+        run: |
+          set -eu
+          uname -a
+          cat /etc/os-release || true
+          docker version
+          echo "Tag: ${GITHUB_REF_NAME}"
+          echo "Commit: ${GITHUB_SHA}"
+          echo "Image: ${REGISTRY}/${IMAGE_REPOSITORY}:${GITHUB_REF_NAME}"
+          echo "Platform: linux/amd64"
+          echo "APT mirror: ${APT_MIRROR}"
+          echo "PIP index: ${PIP_INDEX_URL}"
+          echo "NPM registry: ${NPM_CONFIG_REGISTRY}"
+
+      - name: Login to Gitea Registry
+        run: |
+          set -eu
+          echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login "${REGISTRY}" -u "${{ secrets.REGISTRY_USER }}" --password-stdin
+
+      - name: Build image
+        run: |
+          set -eu
+          docker build \
+            --platform linux/amd64 \
+            --build-arg VERSION=${GITHUB_REF_NAME} \
+            --build-arg APT_MIRROR=${APT_MIRROR} \
+            --build-arg APT_SECURITY_MIRROR=${APT_SECURITY_MIRROR} \
+            --build-arg PIP_INDEX_URL=${PIP_INDEX_URL} \
+            --build-arg NPM_CONFIG_REGISTRY=${NPM_CONFIG_REGISTRY} \
+            -t ${REGISTRY}/${IMAGE_REPOSITORY}:${GITHUB_REF_NAME} \
+            -t ${REGISTRY}/${IMAGE_REPOSITORY}:latest \
+            -t ${REGISTRY}/${IMAGE_REPOSITORY}:sha-${GITHUB_SHA} \
+            .
+
+      - name: Push image tags
+        run: |
+          set -eu
+          docker push ${REGISTRY}/${IMAGE_REPOSITORY}:${GITHUB_REF_NAME}
+          docker push ${REGISTRY}/${IMAGE_REPOSITORY}:latest
+          docker push ${REGISTRY}/${IMAGE_REPOSITORY}:sha-${GITHUB_SHA}

@@ -2,7 +2,20 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+ARG APT_MIRROR
+ARG APT_SECURITY_MIRROR
+ARG PIP_INDEX_URL
+ARG NPM_CONFIG_REGISTRY
+
+RUN if [ -n "${APT_MIRROR}" ]; then \
+        SECURITY_MIRROR="${APT_SECURITY_MIRROR:-${APT_MIRROR}-security}" && \
+        sed -i \
+            -e "s|http://deb.debian.org/debian-security|${SECURITY_MIRROR}|g" \
+            -e "s|http://security.debian.org/debian-security|${SECURITY_MIRROR}|g" \
+            -e "s|http://deb.debian.org/debian|${APT_MIRROR}|g" \
+            /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true; \
+    fi && \
+    apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     gnupg \
@@ -19,8 +32,14 @@ RUN python --version && node --version && npm --version
 COPY requirements.txt .
 COPY package.json package-lock.json ./
 
-RUN pip install --no-cache-dir -r requirements.txt
-RUN npm ci --omit=dev
+RUN if [ -n "${PIP_INDEX_URL}" ]; then \
+        pip config set global.index-url "${PIP_INDEX_URL}"; \
+    fi && \
+    pip install --no-cache-dir -r requirements.txt
+RUN if [ -n "${NPM_CONFIG_REGISTRY}" ]; then \
+        npm config set registry "${NPM_CONFIG_REGISTRY}"; \
+    fi && \
+    npm ci --omit=dev
 
 COPY . .
 
