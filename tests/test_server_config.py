@@ -3,10 +3,20 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import server
 from server import load_cookie
 
 
 class ServerConfigTest(unittest.TestCase):
+    def tearDown(self):
+        server._runtime_cookie = None
+        server._runtime_cookie_updated_at = None
+
+    def test_load_cookie_prefers_runtime_cookie(self):
+        server.update_runtime_config(server.RuntimeConfigRequest(xhsCookie=" a1=runtime "))
+        with patch.dict(os.environ, {"XHS_COOKIE": "a1=from-env"}, clear=True):
+            self.assertEqual(load_cookie(), "a1=runtime")
+
     def test_load_cookie_prefers_xhs_cookie(self):
         with patch.dict(
             os.environ,

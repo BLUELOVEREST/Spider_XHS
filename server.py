@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -19,8 +20,14 @@ class DownloadRequest(BaseModel):
     mediaTypes: list[str] | None = None
 
 
+class RuntimeConfigRequest(BaseModel):
+    xhsCookie: str | None = None
+
+
 app = FastAPI(title="Spider_XHS HTTP Wrapper")
 _pc_api = None
+_runtime_cookie: str | None = None
+_runtime_cookie_updated_at: str | None = None
 
 
 def get_pc_api():
@@ -33,6 +40,9 @@ def get_pc_api():
 
 
 def load_cookie() -> str:
+    if _runtime_cookie:
+        return _runtime_cookie
+
     cookie = os.getenv("XHS_COOKIE", "").strip()
     if cookie:
         return cookie
@@ -63,6 +73,29 @@ def request_timeout() -> float:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/karakeep/v1/config")
+def get_runtime_config() -> dict[str, Any]:
+    return {
+        "xhsCookie": {
+            "configured": bool(_runtime_cookie),
+            "source": "runtime" if _runtime_cookie else "environment",
+            "updatedAt": _runtime_cookie_updated_at,
+        }
+    }
+
+
+@app.put("/api/karakeep/v1/config")
+def update_runtime_config(req: RuntimeConfigRequest) -> dict[str, Any]:
+    global _runtime_cookie, _runtime_cookie_updated_at
+
+    cookie = req.xhsCookie.strip() if req.xhsCookie else ""
+    _runtime_cookie = cookie or None
+    _runtime_cookie_updated_at = (
+        datetime.now(timezone.utc).isoformat() if _runtime_cookie else None
+    )
+    return get_runtime_config()
 
 
 def _extract_feed_item(note_response: Any) -> Any:
